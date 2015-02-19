@@ -1,4 +1,4 @@
-module RunRemoteCommand where
+module System.Process.RemoteCommand where
 
 import System.Process.Exts (runCommandCleanly, runCommand)
 
