@@ -1,5 +1,13 @@
-module System.Process.RemoteCommand where
+module System.Process.RemoteCommand
+    where
 
+import Control.Applicative
+
+import System.Environment    
+import System.FilePath
+import System.Directory    
+
+import System.Process hiding (runCommand)
 import System.Process.Exts (runCommandCleanly, runCommand)
 
 import qualified Data.ByteString.Char8 as BC
@@ -35,3 +43,80 @@ followPath (Node host user idf:rest) = concat [ [ "ssh", "-xT" ]
                                               ]
 
 followPath' (Path p) = followPath p
+
+-- start again:
+
+data SSHIdentityHash = SIH
+    { sih_type    :: String
+    , sih_hash    :: String
+    , sih_comment :: String
+    } deriving (Eq, Ord, Show, Read)
+
+data SSHIdentity = SI
+    { si_hash :: SSHIdentityHash
+    , si_path :: FilePath
+    } deriving (Eq, Ord, Show, Read)
+
+-- a node in the graph of all accounts in a distributed system of
+-- machines consists of a hostname, user (login) name, a list of
+-- authorized keys for reaching the node, and a set if ssh keys for
+-- transferring to neighbouring nodes.
+
+data MachineLogin = ML
+    { ml_host       :: Host
+    , ml_user       :: User
+    , ml_identities :: [SSHIdentity]
+    , ml_authorized :: [SSHIdentityHash]
+    } deriving (Eq, Ord, Show, Read)
+
+-- data SSHEdge = SE MachineLogin MachineLogin
+--              deriving (Eq, Ord, Show, Read)
+
+-- data SSHPath = SP [SSHEdge]
+--              deriving (Eq, Ord, Show, Read)
+
+readPublicFile :: FilePath -> IO [SSHIdentityHash]
+readPublicFile fName = map hashParser . lines <$> readFile fName
+
+-- keys accepted for passwordless login (default file location):
+
+readAuthorizedKeyFile :: IO [SSHIdentityHash]
+readAuthorizedKeyFile = do
+  homeDir <- getEnv "HOME"
+  let fName = homeDir </> ".ssh" </> "authorized_keys"
+  ok <- doesFileExist fName
+  if ok
+  then readPublicFile fName
+  else return []
+
+-- keys available in the file system, only in the .ssh directory:
+
+readIdentityFiles :: IO [SSHIdentity]
+readIdentityFiles = do
+  homeDir <- getEnv "HOME"
+  fs <- filterCandidates <$> getDirectoryContents (homeDir </> ".ssh")
+  let helper name = let dir = homeDir </> ".ssh"
+                    in map (\ r -> SI r (dir </> name)) <$> (readPublicFile (dir </> name))
+  xs <- concat <$> mapM helper fs
+  return xs
+
+filterCandidates :: [FilePath] -> [FilePath]
+filterCandidates rs =
+    let rs'  = filter ((== ".pub") . takeExtension) rs
+        rs'' = filter ((`elem` rs) . dropExtension) rs'
+    in rs''
+
+-- keys available through ssh-agent:
+
+readAgentKeys :: IO [SSHIdentityHash]
+readAgentKeys = map hashParser . lines <$> readProcess "ssh-add" [ "-L" ] ""
+
+-- oversimplified parser for and SSH Identity Hash, found in public
+-- parts of the key file and in authorized_keys:
+
+hashParser :: String -> SSHIdentityHash
+hashParser = (\(a:b:rest) -> SIH a b (unwords rest)) . words
+
+------------------------------------------------------------------------
+
+-- we still need to treat connectivity separately:
