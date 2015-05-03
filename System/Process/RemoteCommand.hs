@@ -120,3 +120,13 @@ hashParser = (\(a:b:rest) -> SIH a b (unwords rest)) . words
 ------------------------------------------------------------------------
 
 -- we still need to treat connectivity separately:
+
+writeConfiguration :: IO ()
+writeConfiguration = do
+  hostName   <- readProcess "hostname" [ "-s" ] ""
+  user       <- getEnv "USER"
+  identities <- readIdentityFiles
+  authorized <- readAuthorizedKeyFile
+  let n = ML hostName user identities authorized
+  print ( user ++ "@" ++ hostName, n)
+  
