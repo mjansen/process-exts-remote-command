@@ -82,7 +82,7 @@ readPublicFile fName = map hashParser . lines <$> readFile fName
 
 readAuthorizedKeyFile :: FilePath -> IO [SSHIdentityHash]
 readAuthorizedKeyFile topDir = do
-  let fName = topDir </> ".ssh" </> "authorized_keys"
+  let fName = topDir </> "authorized_keys"
   ok <- doesFileExist fName
   if ok
   then readPublicFile fName
@@ -92,9 +92,8 @@ readAuthorizedKeyFile topDir = do
 
 readIdentityFiles :: FilePath -> IO [SSHIdentity]
 readIdentityFiles topDir = do
-  fs <- filterCandidates <$> getDirectoryContents (topDir </> ".ssh")
-  let helper name = let dir = topDir </> ".ssh"
-                    in map (\ r -> SI r (dir </> name)) <$> (readPublicFile (dir </> name))
+  fs <- filterCandidates <$> getDirectoryContents topDir
+  let helper name = map (\ r -> SI r (topDir </> name)) <$> (readPublicFile (topDir </> name))
   xs <- concat <$> mapM helper fs
   return xs
 
@@ -130,7 +129,7 @@ writeConfigurationFor topDir = do
   
 
 writeConfiguration :: IO ()
-writeConfiguration = writeConfigurationFor =<< getEnv "HOME"
+writeConfiguration = writeConfigurationFor . (</> ".ssh") =<< getEnv "HOME"
 
 writeConfigurations :: [FilePath] -> IO ()
 writeConfigurations = mapM_ writeConfigurationFor
