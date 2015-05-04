@@ -80,10 +80,9 @@ readPublicFile fName = map hashParser . lines <$> readFile fName
 
 -- keys accepted for passwordless login (default file location):
 
-readAuthorizedKeyFile :: IO [SSHIdentityHash]
-readAuthorizedKeyFile = do
-  homeDir <- getEnv "HOME"
-  let fName = homeDir </> ".ssh" </> "authorized_keys"
+readAuthorizedKeyFile :: FilePath -> IO [SSHIdentityHash]
+readAuthorizedKeyFile topDir = do
+  let fName = topDir </> ".ssh" </> "authorized_keys"
   ok <- doesFileExist fName
   if ok
   then readPublicFile fName
@@ -91,11 +90,10 @@ readAuthorizedKeyFile = do
 
 -- keys available in the file system, only in the .ssh directory:
 
-readIdentityFiles :: IO [SSHIdentity]
-readIdentityFiles = do
-  homeDir <- getEnv "HOME"
-  fs <- filterCandidates <$> getDirectoryContents (homeDir </> ".ssh")
-  let helper name = let dir = homeDir </> ".ssh"
+readIdentityFiles :: FilePath -> IO [SSHIdentity]
+readIdentityFiles topDir = do
+  fs <- filterCandidates <$> getDirectoryContents (topDir </> ".ssh")
+  let helper name = let dir = topDir </> ".ssh"
                     in map (\ r -> SI r (dir </> name)) <$> (readPublicFile (dir </> name))
   xs <- concat <$> mapM helper fs
   return xs
@@ -121,12 +119,18 @@ hashParser = (\(a:b:rest) -> SIH a b (unwords rest)) . words
 
 -- we still need to treat connectivity separately:
 
-writeConfiguration :: IO ()
-writeConfiguration = do
+writeConfigurationFor :: FilePath -> IO ()
+writeConfigurationFor topDir = do
   hostName   <- readProcess "hostname" [ "-s" ] ""
   user       <- getEnv "USER"
-  identities <- readIdentityFiles
-  authorized <- readAuthorizedKeyFile
+  identities <- readIdentityFiles     topDir
+  authorized <- readAuthorizedKeyFile topDir
   let n = ML hostName user identities authorized
   print ( user ++ "@" ++ hostName, n)
   
+
+writeConfiguration :: IO ()
+writeConfiguration = writeConfigurationFor =<< getEnv "HOME"
+
+writeConfigurations :: [FilePath] -> IO ()
+writeConfigurations = mapM_ writeConfigurationFor
