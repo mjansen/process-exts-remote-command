@@ -10,6 +10,7 @@ import System.Directory
 import System.Process hiding (runCommand)
 import System.Process.Exts (runCommandCleanly, runCommand)
 
+import Data.Maybe
 import qualified Data.ByteString.Char8 as BC
 
 type Host         = String
@@ -76,7 +77,7 @@ data MachineLogin = ML
 --              deriving (Eq, Ord, Show, Read)
 
 readPublicFile :: FilePath -> IO [SSHIdentityHash]
-readPublicFile fName = map hashParser . lines <$> readFile fName
+readPublicFile fName = catMaybes . map hashParser . lines <$> readFile fName
 
 -- keys accepted for passwordless login (default file location):
 
@@ -106,13 +107,17 @@ filterCandidates rs =
 -- keys available through ssh-agent:
 
 readAgentKeys :: IO [SSHIdentityHash]
-readAgentKeys = map hashParser . lines <$> readProcess "ssh-add" [ "-L" ] ""
+readAgentKeys = catMaybes . map hashParser . lines <$> readProcess "ssh-add" [ "-L" ] ""
 
 -- oversimplified parser for and SSH Identity Hash, found in public
 -- parts of the key file and in authorized_keys:
 
-hashParser :: String -> SSHIdentityHash
-hashParser = (\(a:b:rest) -> SIH a b (unwords rest)) . words
+hashParser :: String -> Maybe SSHIdentityHash
+hashParser str =
+    case take 1 . words $ str of
+      [ "ssh-dss" ] -> Just . (\(a:b:rest) -> SIH a b (unwords rest)) . words $ str
+      [ "ssh-rsa" ] -> Just . (\(a:b:rest) -> SIH a b (unwords rest)) . words $ str
+      _ -> Nothing
 
 ------------------------------------------------------------------------
 
