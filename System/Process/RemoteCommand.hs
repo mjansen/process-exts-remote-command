@@ -125,7 +125,7 @@ hashParser str =
 
 writeConfigurationFor :: FilePath -> IO ()
 writeConfigurationFor topDir = do
-  hostName   <- readProcess "hostname" [ "-s" ] ""
+  hostName   <- head . lines <$> readProcess "hostname" [ "-s" ] ""
   user       <- getEnv "USER"
   identities <- readIdentityFiles     topDir
   authorized <- readAuthorizedKeyFile topDir
